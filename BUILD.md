@@ -140,6 +140,19 @@ csc 命令**，产出 exe 并上传为 artifact，同时作为仓库的 **Build 
 
 > 注意：exe 在 `.gitignore` 中（构建产物不入库），CI 从源码实时构建——保证“源码可复现构建”。
 
+### 6.1 Release 自动打包（打标签即发布）
+
+当推送**版本标签**（如 `v1.0.0`）时，CI 会自动把整个发布目录（exe + 全部脚本 +
+`assets\` + `docs\` 截图 + README/LICENSE/BUILD）打包成
+`DeepSeekHarnessLauncher-<版本>.zip` 并附加到对应 GitHub Release：
+
+```bash
+git tag v1.0.0
+git push origin v1.0.0
+```
+
+发布流程：`push` 普通提交只构建校验；`push v*` 标签额外打包 ZIP 并上传 Release。
+
 ---
 
 ## 7. 若改用 .NET SDK / Visual Studio

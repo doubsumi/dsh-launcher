@@ -3,8 +3,12 @@ name: build
 on:
   push:
     branches: [main]
+    tags: ['v*']
   pull_request:
   workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
   build:
@@ -23,8 +27,33 @@ jobs:
           if (-not (Test-Path DeepSeekHarnessLauncher.exe)) { throw "exe not built" }
           Write-Output "Built: $((Get-Item DeepSeekHarnessLauncher.exe).Length) bytes"
 
-      - name: Upload artifact
+      - name: Upload exe artifact
         uses: actions/upload-artifact@v4
         with:
           name: DeepSeekHarnessLauncher-exe
           path: DeepSeekHarnessLauncher.exe
+
+      # --- Release packaging: only on version tags (v*) ---
+      # Packs the whole launcher directory (exe + scripts + assets + docs) into
+      # a versioned zip and attaches it to the GitHub Release for that tag.
+      - name: Package release zip
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: |
+          $version = $env:GITHUB_REF_NAME.TrimStart('v')
+          $folder  = "DeepSeekHarnessLauncher-$version"
+          $staging = "package\$folder"
+          New-Item -ItemType Directory -Force $staging | Out-Null
+          Copy-Item DeepSeekHarnessLauncher.exe, Launcher.cs, *.cmd, *.ps1, BUILD.md, README.md, LICENSE -Destination $staging
+          Copy-Item assets, docs -Destination $staging -Recurse
+          Remove-Item "$staging\docs\screenshots\README.md" -Force -ErrorAction SilentlyContinue
+          Compress-Archive -Path $staging -DestinationPath "$folder.zip" -CompressionLevel Optimal
+          Write-Output "ZIP: $((Get-Item "$folder.zip").Length) bytes"
+
+      - name: Upload release asset
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: DeepSeekHarnessLauncher-*.zip
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
