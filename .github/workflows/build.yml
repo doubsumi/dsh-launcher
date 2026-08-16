@@ -1,0 +1,30 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build DeepSeekHarnessLauncher.exe
+        shell: cmd
+        run: |
+          "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
+
+      - name: Verify artifact
+        shell: pwsh
+        run: |
+          if (-not (Test-Path DeepSeekHarnessLauncher.exe)) { throw "exe not built" }
+          Write-Output "Built: $((Get-Item DeepSeekHarnessLauncher.exe).Length) bytes"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: DeepSeekHarnessLauncher-exe
+          path: DeepSeekHarnessLauncher.exe

@@ -1,5 +1,11 @@
 # DeepSeek Harness 启动器（Windows 11）
 
+[![Build](https://github.com/doubsumi/dsh-launcher/actions/workflows/build.yml/badge.svg)](https://github.com/doubsumi/dsh-launcher/actions/workflows/build.yml)
+[![License](https://img.shields.io/github/license/doubsumi/dsh-launcher)](LICENSE)
+[![Platform](https://img.shields.io/badge/platform-Windows%2011-0078d4?style=flat-square)]()
+[![GitHub stars](https://img.shields.io/github/stars/doubsumi/dsh-launcher?style=flat-square)](https://github.com/doubsumi/dsh-launcher)
+[![GitHub forks](https://img.shields.io/github/forks/doubsumi/dsh-launcher?style=flat-square)](https://github.com/doubsumi/dsh-launcher)
+
 > **免责声明**：本仓库为**非官方**第三方工具，仅用于启动 DeepSeek Harness（`dsh` CLI）。
 > 与 DeepSeek（深度求索）及其官方项目**无任何隶属、赞助或背书关系**；“DeepSeek”及
 > 相关名称均为其各自所有者的商标。
@@ -11,6 +17,20 @@
 
 右键（Windows11 shift + 右键）该快捷方式会看到**系统标准菜单**（打开、打开文件所在位置、以管理员身份运行、
 以其他用户身份运行、属性……），并**额外多出一项**“保持cmd窗口运行”——这保留了dsh的命令行启动方式，保持后台cmd窗口打开，但直接双击快捷方式默认不保留后台窗口。
+
+## 截图
+
+> 图片占位（待补充）：把截图文件放入 `docs/screenshots/` 目录（可先看该目录里的
+> README 说明），下方占位图即会自动显示。
+
+### 桌面快捷方式
+![桌面快捷方式（占位，待补充）](docs/screenshots/desktop-icon.png)
+
+### 右键菜单（含“保持cmd窗口运行”）
+![右键菜单（占位，待补充）](docs/screenshots/context-menu.png)
+
+### DeepSeek Harness Web 界面
+![Web 界面（占位，待补充）](docs/screenshots/web-ui.png)
 
 ## 目录结构
 
