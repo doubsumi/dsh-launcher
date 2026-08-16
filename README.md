@@ -24,10 +24,10 @@
 > README 说明），下方占位图即会自动显示。
 
 ### 桌面快捷方式
-![桌面快捷方式（占位，待补充）](docs/screenshots/desktop-icon.png)
+<img src="docs/screenshots/desktop-icon.png" alt="桌面快捷方式（占位，待补充）" style="zoom: 80%;" />
 
 ### 右键菜单（含“保持cmd窗口运行”）
-![右键菜单（占位，待补充）](docs/screenshots/context-menu.png)
+<img src="docs/screenshots/context-menu.png" alt="右键菜单（占位，待补充）" style="zoom: 80%;" />
 
 ### DeepSeek Harness Web 界面
 ![Web 界面（占位，待补充）](docs/screenshots/web-ui.png)
