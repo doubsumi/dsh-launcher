@@ -1,5 +1,6 @@
 # === runtime data (created on first launch) ===
 logs/
+docs/screenshots/README.md
 
 # === build output ===
 # DeepSeekHarnessLauncher.exe is generated from Launcher.cs (see README);

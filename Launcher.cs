@@ -32,7 +32,7 @@ internal static class Program
     private const int TCP_TABLE_OWNER_PID_ALL = 5;
     private const uint MIB_TCP_STATE_LISTEN = 2;
     private const uint MIB_TCP_STATE_ESTAB = 5;
-    private const int MONITOR_POLL_MS = 5000;
+    private const int MONITOR_POLL_MS = 1000;
     private const int MONITOR_STARTUP_WAIT_SECONDS = 60;
 
     [StructLayout(LayoutKind.Sequential)]
@@ -213,10 +213,10 @@ internal static class Program
     private static int RunMonitor(string[] args)
     {
         int port = 3080;
-        int graceSeconds = 60;
+        int graceSeconds = 1;
         if (args.Length > 1) int.TryParse(args[1], out port);
         if (args.Length > 2) int.TryParse(args[2], out graceSeconds);
-        if (graceSeconds < 5) graceSeconds = 5;
+        if (graceSeconds < 1) graceSeconds = 1;
 
         // phase 1: wait for dsh to start listening (spawned before/around dsh)
         int listenerPid = 0;

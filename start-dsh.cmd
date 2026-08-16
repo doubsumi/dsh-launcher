@@ -12,7 +12,7 @@ rem  Optional environment overrides:
 rem    DSH_PORT=3080            -> port (default 3080)
 rem    DSH_NO_BROWSER=1         -> do not auto-open the browser
 rem    DSH_AUTO_STOP=0          -> disable auto-stop when the web tab closes
-rem    DSH_AUTO_STOP_IDLE=60    -> idle seconds before auto-stop (default 60)
+rem    DSH_AUTO_STOP_IDLE=1     -> idle seconds before auto-stop (default 1)
 rem
 rem  Logs: <this folder>\logs\dsh_<timestamp>.log
 rem  PID  : <this folder>\logs\dsh.pid   (of the process listening on the port)
@@ -53,15 +53,21 @@ rem --- already running? (port in LISTEN state; netstat works even without WinRM
 netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>nul
 if not errorlevel 1 goto already_running
 
-rem --- not running: start it ---
-rem --- auto-stop monitor: closing the web tab stops dsh (optional) ---
+rem --- auto-stop monitor: closing the LAST web tab stops dsh (optional) ---
 rem     DSH_AUTO_STOP=0        -> disable
-rem     DSH_AUTO_STOP_IDLE=<s> -> idle grace in seconds (default 60)
-set "GRACE=60"
+rem     DSH_AUTO_STOP_IDLE=<s> -> idle grace in seconds (default 1)
+rem Spawned BEFORE the port check so it also covers the already-running case.
+set "GRACE=1"
 if defined DSH_AUTO_STOP_IDLE set "GRACE=%DSH_AUTO_STOP_IDLE%"
 if /i not "%DSH_AUTO_STOP%"=="0" (
     start "" /b "%APP_DIR%DeepSeekHarnessLauncher.exe" --monitor %PORT% %GRACE%
 )
+
+rem --- already running? (port in LISTEN state; netstat works even without WinRM/CIM) ---
+netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>nul
+if not errorlevel 1 goto already_running
+
+rem --- not running: start it ---
 if /i "%MODE%"=="visible" goto start_visible
 
 :start_hidden
