@@ -20,9 +20,6 @@
 
 ## 截图
 
-> 图片占位（待补充）：把截图文件放入 `docs/screenshots/` 目录（可先看该目录里的
-> README 说明），下方占位图即会自动显示。
-
 ### 桌面快捷方式
 <img src="docs/screenshots/desktop-icon.png" alt="桌面快捷方式（占位，待补充）" style="zoom: 80%;" />
 
@@ -68,7 +65,7 @@ DeepSeekHarnessLauncher\
 | 停止服务 | 双击运行 `stop-dsh.cmd`（或命令行 `stop-dsh.cmd`） |
 | 打开界面 | 双击 `open-ui.cmd`，或浏览器访问 http://127.0.0.1:3080 |
 
-### 右键菜单“保持cmd窗口运行”的实现方式（专业、可发布）
+### 右键菜单“保持cmd窗口运行”的实现方式
 
 - 快捷方式本身就是普通 `.lnk`，**系统标准右键菜单完整保留**（打开 / 打开文件所在
   位置 / 以管理员身份运行 / 以其他用户身份运行 / 属性等）。
@@ -146,8 +143,7 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe ^
   /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
 ```
 
-`/win32icon` 会把官方黑色鲸鱼图标内嵌进 exe，快捷方式和右键菜单图标均指向该内嵌
-图标，因此 exe 可单独分发。
+
 
 ## 常见问题
 
