@@ -9,9 +9,8 @@
 （`dsh web`，默认端口 3080）：cmd 窗口完全隐藏，服务输出写入日志文件，并自动打开
 浏览器 `http://127.0.0.1:3080`。
 
-右键该快捷方式会看到**系统标准菜单**（打开、打开文件所在位置、以管理员身份运行、
-以其他用户身份运行、属性……），并**额外多出一项**“保持cmd窗口运行”——它只出现在
-这一个快捷方式上，不影响其他任何快捷方式。
+右键（Windows11 shift + 右键）该快捷方式会看到**系统标准菜单**（打开、打开文件所在位置、以管理员身份运行、
+以其他用户身份运行、属性……），并**额外多出一项**“保持cmd窗口运行”——这保留了dsh的命令行启动方式，保持后台cmd窗口打开，但直接双击快捷方式默认不保留后台窗口。
 
 ## 目录结构
 
@@ -63,7 +62,9 @@ DeepSeekHarnessLauncher\
 
 ### dsh 环境检测与自动安装
 
-每次启动时，启动器会先检测 dsh 是否可用（查找 `%APPDATA%\npm\dsh.cmd` 及 PATH）：
+每次启动时，启动器会先检测 dsh 是否可用。查找方式是**通用方案**（不写死路径）：
+按顺序尝试 `PATH` 中的 `dsh.cmd` → `npm prefix -g` 返回的全局安装目录 →
+npm 默认目录 `%APPDATA%\npm`，因此无论 dsh 装在哪个自定义 npm 前缀下都能找到。
 
 - **已安装**：直接按所选模式启动，无任何提示。
 - **未安装**：弹出 Windows 对话框询问“是否立即自动下载并安装？”。选择
@@ -71,6 +72,16 @@ DeepSeekHarnessLauncher\
   （窗口保持打开，方便查看结果）；选择 **“否”** 则直接退出。
 - 自动安装依赖 Node.js 与 npm（若未安装 Node.js，请先到
   https://nodejs.org 安装，再重新运行启动器）。
+
+### 自动停止：关闭 web 标签页即停止 dsh
+
+启动器在后台运行一个**监视器**：只要 `http://127.0.0.1:3080` 没有活动连接
+（即用户关闭了浏览器标签页），宽限期（默认 60 秒）后自动停止 dsh——无需手动关进程，
+也让后台不再有残留的 dsh。
+
+- 宽限期可通过环境变量调整：`DSH_AUTO_STOP_IDLE=120`（秒）
+- 不需要此行为可设置 `DSH_AUTO_STOP=0`
+- 手动停止仍然可用：`stop-dsh.cmd`
 
 ### 注意事项
 
@@ -83,6 +94,8 @@ DeepSeekHarnessLauncher\
 
 - `DSH_PORT=3080`：修改端口
 - `DSH_NO_BROWSER=1`：启动后不自动打开浏览器
+- `DSH_AUTO_STOP=0`：关闭自动停止（关闭标签页不再停止 dsh）
+- `DSH_AUTO_STOP_IDLE=60`：自动停止的闲置宽限秒数（默认 60）
 
 ## 卸载（完整恢复）
 
@@ -116,9 +129,9 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe ^
 
 ## 常见问题
 
-- **找不到 dsh**：确认已全局安装 `npm install -g @deepseek-ai/dsh`，且
-  `%APPDATA%\npm` 在 PATH 中；脚本会依次尝试 `where dsh.cmd` 与
-  `%APPDATA%\npm\dsh.cmd`。
+- **找不到 dsh**：确认已全局安装 `npm install -g @deepseek-ai/dsh`。启动器按
+  `PATH` → `npm prefix -g` → `%APPDATA%\npm` 的顺序通用查找，不依赖固定路径；
+  若 npm 全局目录不在 PATH 中也会被自动找到。
 - **端口被占用**：脚本检测到端口已在监听时会认为 DSH 已运行，直接打开浏览器。
 - **停止失败提示“不是 node.exe”**：说明该端口被其他程序占用，脚本出于安全不会
   误杀，请用 `netstat -ano | findstr :3080` 自行确认。

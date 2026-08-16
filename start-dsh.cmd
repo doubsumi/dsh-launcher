@@ -11,6 +11,8 @@ rem
 rem  Optional environment overrides:
 rem    DSH_PORT=3080            -> port (default 3080)
 rem    DSH_NO_BROWSER=1         -> do not auto-open the browser
+rem    DSH_AUTO_STOP=0          -> disable auto-stop when the web tab closes
+rem    DSH_AUTO_STOP_IDLE=60    -> idle seconds before auto-stop (default 60)
 rem
 rem  Logs: <this folder>\logs\dsh_<timestamp>.log
 rem  PID  : <this folder>\logs\dsh.pid   (of the process listening on the port)
@@ -34,9 +36,10 @@ rem --- timestamps (locale-independent, via PowerShell) ---
 for /f "tokens=1,2,3" %%a in ('powershell -NoProfile -Command "Get-Date -Format 'yyyyMMdd_HHmmss yyyy-MM-dd HH:mm:ss'"') do set "TS=%%a" & set "TSH=%%b %%c"
 set "LOG=%LOG_DIR%\dsh_%TS%.log"
 
-rem --- locate dsh (npm global bin, with PATH fallback) ---
+rem --- locate dsh (generic: PATH -> `npm prefix -g` -> npm default %APPDATA%\npm) ---
 set "DSH_CMD="
 for /f "delims=" %%p in ('where dsh.cmd 2^>nul') do if not defined DSH_CMD set "DSH_CMD=%%p"
+if not defined DSH_CMD for /f "delims=" %%p in ('npm prefix -g 2^>nul') do if not defined DSH_CMD if exist "%%p\dsh.cmd" set "DSH_CMD=%%p\dsh.cmd"
 if not defined DSH_CMD if exist "%APPDATA%\npm\dsh.cmd" set "DSH_CMD=%APPDATA%\npm\dsh.cmd"
 if not defined DSH_CMD (
     echo [ERROR] dsh command not found. Install it with:  npm install -g @deepseek-ai/dsh
@@ -51,6 +54,14 @@ netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>nul
 if not errorlevel 1 goto already_running
 
 rem --- not running: start it ---
+rem --- auto-stop monitor: closing the web tab stops dsh (optional) ---
+rem     DSH_AUTO_STOP=0        -> disable
+rem     DSH_AUTO_STOP_IDLE=<s> -> idle grace in seconds (default 60)
+set "GRACE=60"
+if defined DSH_AUTO_STOP_IDLE set "GRACE=%DSH_AUTO_STOP_IDLE%"
+if /i not "%DSH_AUTO_STOP%"=="0" (
+    start "" /b "%APP_DIR%DeepSeekHarnessLauncher.exe" --monitor %PORT% %GRACE%
+)
 if /i "%MODE%"=="visible" goto start_visible
 
 :start_hidden
