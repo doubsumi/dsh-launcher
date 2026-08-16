@@ -1,0 +1,27 @@
+# === runtime data (created on first launch) ===
+logs/
+
+# === build output ===
+# DeepSeekHarnessLauncher.exe is generated from Launcher.cs (see README);
+# publish binaries via GitHub Releases instead of the repo.
+*.exe
+
+# === OS / Explorer junk ===
+Thumbs.db
+Desktop.ini
+ehthumbs.db
+$RECYCLE.BIN/
+
+# === editor junk ===
+.vs/
+.idea/
+.vscode/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# === misc ===
+*.log
+status.txt
+dsh.pid
