@@ -151,5 +151,8 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe ^
   `PATH` → `npm prefix -g` → `%APPDATA%\npm` 的顺序通用查找，不依赖固定路径；
   若 npm 全局目录不在 PATH 中也会被自动找到。
 - **端口被占用**：脚本检测到端口已在监听时会认为 DSH 已运行，直接打开浏览器。
+- **只打开一个标签页**：新版 dsh 启动时会自己打开浏览器，容易与启动器打开的页面叠加
+  成两个。启动器检测到 `dsh web --no-open` 受支持时会自动加上该参数，改由启动器统一
+  打开一个页面；旧版 dsh 没有该参数（也不会自动打开），行为不受影响。
 - **停止失败提示“不是 node.exe”**：说明该端口被其他程序占用，脚本出于安全不会
   误杀，请用 `netstat -ano | findstr :3080` 自行确认。

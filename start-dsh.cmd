@@ -49,10 +49,6 @@ if not defined DSH_CMD (
 
 echo [%TSH%] DSH launcher: mode=%MODE% url=%URL% dsh=%DSH_CMD% >> "%LOG%"
 
-rem --- already running? (port in LISTEN state; netstat works even without WinRM/CIM) ---
-netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>nul
-if not errorlevel 1 goto already_running
-
 rem --- auto-stop monitor: closing the LAST web tab stops dsh (optional) ---
 rem     DSH_AUTO_STOP=0        -> disable
 rem     DSH_AUTO_STOP_IDLE=<s> -> idle grace in seconds (default 1)
@@ -67,14 +63,26 @@ rem --- already running? (port in LISTEN state; netstat works even without WinRM
 netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>nul
 if not errorlevel 1 goto already_running
 
-rem --- not running: start it ---
+rem --- not running: detect browser-opening support, then start it ---
+rem Newer dsh (openBrowser defaults to true) opens the Web UI itself, which would
+rem produce a second tab next to the one this launcher opens. `--no-open` suppresses
+rem that, so exactly one tab is opened here. Older dsh has neither the flag nor the
+rem auto-open, so the flag is only added when the installed dsh advertises it.
+set "DSH_ARGS=web"
+call "%DSH_CMD%" web --help > "%LOG_DIR%\dsh-help.tmp" 2>&1
+findstr /c:"--no-open" "%LOG_DIR%\dsh-help.tmp" >nul 2>nul
+if not errorlevel 1 set "DSH_ARGS=web --no-open"
+del "%LOG_DIR%\dsh-help.tmp" >nul 2>nul
+
+echo [%TSH%] dsh args: %DSH_ARGS% >> "%LOG%"
+
 if /i "%MODE%"=="visible" goto start_visible
 
 :start_hidden
 rem Launch dsh inside this (hidden) console; all output goes to the log file.
 rem Note: once the server holds the log handle, other processes cannot append
 rem to it, so post-start state goes to logs\status.txt instead.
-start "" /b cmd /c ""%DSH_CMD%" web >>"%LOG%" 2>&1"
+start "" /b cmd /c ""%DSH_CMD%" %DSH_ARGS% >>"%LOG%" 2>&1"
 goto wait_ready
 
 :start_visible
@@ -86,7 +94,7 @@ echo   Log : %LOG%
 echo   Press Ctrl+C in this window to stop the server.
 echo ============================================================
 echo.
-call "%DSH_CMD%" web
+call "%DSH_CMD%" %DSH_ARGS%
 set "RC=%ERRORLEVEL%"
 echo.
 echo DSH server exited with code %RC%.

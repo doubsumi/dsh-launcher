@@ -1,0 +1,7 @@
+# Windows batch files MUST be checked out with CRLF line endings:
+# cmd.exe's `goto`/`call :label` label lookup is unreliable in LF-only batch files.
+*.cmd text eol=crlf
+*.bat text eol=crlf
+
+# PowerShell handles either, but keep Windows tooling consistent.
+*.ps1 text eol=crlf
