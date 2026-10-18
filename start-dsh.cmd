@@ -66,13 +66,19 @@ if not errorlevel 1 goto already_running
 rem --- not running: detect browser-opening support, then start it ---
 rem Newer dsh (openBrowser defaults to true) opens the Web UI itself, which would
 rem produce a second tab next to the one this launcher opens. `--no-open` suppresses
-rem that, so exactly one tab is opened here. Older dsh has neither the flag nor the
-rem auto-open, so the flag is only added when the installed dsh advertises it.
+rem that, so exactly one tab is opened here. The flag is detected by reading the
+rem installed dsh-web-app package file (instant, no extra dsh boot - booting dsh
+rem just to print --help costs seconds and can even hang); older dsh without the
+rem flag keeps plain `web` (it never auto-opens).
 set "DSH_ARGS=web"
-call "%DSH_CMD%" web --help > "%LOG_DIR%\dsh-help.tmp" 2>&1
-findstr /c:"--no-open" "%LOG_DIR%\dsh-help.tmp" >nul 2>nul
-if not errorlevel 1 set "DSH_ARGS=web --no-open"
-del "%LOG_DIR%\dsh-help.tmp" >nul 2>nul
+set "DSH_STARTUP="
+for %%i in ("%DSH_CMD%") do set "DSH_BIN=%%~dpi"
+if exist "%DSH_BIN%node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\dsh-web-app\lib\startup.js" set "DSH_STARTUP=%DSH_BIN%node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\dsh-web-app\lib\startup.js"
+if not defined DSH_STARTUP if exist "%DSH_BIN%node_modules\@deepseek-ai\dsh-web-app\lib\startup.js" set "DSH_STARTUP=%DSH_BIN%node_modules\@deepseek-ai\dsh-web-app\lib\startup.js"
+if defined DSH_STARTUP (
+    findstr /c:"--no-open" "%DSH_STARTUP%" >nul 2>nul
+    if not errorlevel 1 set "DSH_ARGS=web --no-open"
+)
 
 echo [%TSH%] dsh args: %DSH_ARGS% >> "%LOG%"
 
