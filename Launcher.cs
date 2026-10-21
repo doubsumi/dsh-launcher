@@ -52,8 +52,8 @@ internal static class Program
     private const int TCP_TABLE_OWNER_PID_ALL = 5;
     private const uint MIB_TCP_STATE_LISTEN = 2;
     private const uint MIB_TCP_STATE_ESTAB = 5;
-    private const int MONITOR_POLL_MS = 1000;
-    private const int MONITOR_STARTUP_WAIT_SECONDS = 60;
+    private const int MONITOR_POLL_MS = 250;
+    private const int MONITOR_STARTUP_WAIT_SECONDS = 300;
 
     [StructLayout(LayoutKind.Sequential)]
     private struct MibTcpRowOwnerPid
@@ -709,7 +709,7 @@ internal static class Program
     private static int RunMonitor(string[] args)
     {
         int port = 3080;
-        int graceSeconds = 1;
+        int graceSeconds = 3;
         if (args.Length > 1) int.TryParse(args[1], out port);
         if (args.Length > 2) int.TryParse(args[2], out graceSeconds);
         if (graceSeconds < 1) graceSeconds = 1;

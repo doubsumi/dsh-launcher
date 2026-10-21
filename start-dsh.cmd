@@ -55,9 +55,9 @@ echo [%TSH%] DSH launcher: mode=%MODE% url=%URL% dsh=%DSH_CMD% >> "%LOG%"
 
 rem --- auto-stop monitor: closing the LAST web tab stops dsh (optional) ---
 rem     DSH_AUTO_STOP=0        -> disable
-rem     DSH_AUTO_STOP_IDLE=<s> -> idle grace in seconds (default 1)
+rem     DSH_AUTO_STOP_IDLE=<s> -> idle grace in seconds (default 3)
 rem Spawned BEFORE the port check so it also covers the already-running case.
-set "GRACE=1"
+set "GRACE=3"
 if defined DSH_AUTO_STOP_IDLE set "GRACE=%DSH_AUTO_STOP_IDLE%"
 if /i not "%DSH_AUTO_STOP%"=="0" (
     start "" /b "%APP_DIR%DeepSeekHarnessLauncher.exe" --monitor %PORT% %GRACE%
