@@ -17,6 +17,8 @@
 using System;
 using System.Diagnostics;
 using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -31,7 +33,7 @@ internal static class Program
     // splash window texts (Chinese, base64 keeps this source file pure ASCII)
     private const string SPLASH_START_B64 = "5q2j5Zyo5ZCv5YqoIERTSC4uLg==";
     private const string SPLASH_READY_B64 = "5bey5ZCv5Yqo77yM5q2j5Zyo5omT5byA6aG16Z2iLi4u";
-    private const string SPLASH_FAIL_B64 = "5ZCv5Yqo5aSx6LSl77yM6K+35p+l55yL5pel5b+X77yM5oiW5pS555So5Y+z6ZSu6I+c5Y2V55qE44CM5L+d5oyBY21k56qX5Y+j6L+Q6KGM44CN";
+    private const string SPLASH_FAIL_B64 = "5ZCv5Yqo5aSx6LSl77yM6K+35p+l55yL5pel5b+X";
 
     private const int AF_INET = 2;
     private const int TCP_TABLE_OWNER_PID_ALL = 5;
@@ -134,9 +136,10 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
-    // Startup splash for the normal, console-less launch: a small
-    // semi-transparent window that mirrors logs\progress.txt (written by
-    // start-dsh.cmd) and closes itself once the web UI is listening.
+    // Startup splash for the normal, console-less launch: a fully
+    // transparent layered window showing the DSH icon, the latest launcher
+    // line and a rounded progress bar; it closes itself once the web UI is
+    // listening. Data comes from logs\progress.txt (written by start-dsh.cmd).
     // ------------------------------------------------------------------
     private static void ShowSplash(Process batch, string baseDir)
     {
@@ -150,7 +153,7 @@ internal static class Program
 
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
-        using (SplashForm form = new SplashForm(batch, port, Path.Combine(baseDir, "logs")))
+        using (SplashForm form = new SplashForm(batch, port, baseDir))
         {
             Application.Run(form);
         }
@@ -158,120 +161,217 @@ internal static class Program
 
     private sealed class SplashForm : Form
     {
-        private const double TargetOpacity = 0.92;
+        private const int WindowWidth = 420;
+        private const int WindowHeight = 320;
+        private const int IconSide = 200;
+        private const int BarWidth = 300;
+        private const int BarHeight = 10;
+        private const int BarTop = 286;
+        private const int WS_EX_LAYERED = 0x00080000;
+        private const int ULW_ALPHA = 2;
+        private const int AC_SRC_OVER = 0;
+        private const int AC_SRC_ALPHA = 1;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct PointI
+        {
+            public int X;
+            public int Y;
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SizeI
+        {
+            public int cx;
+            public int cy;
+        }
+
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
+        private struct BlendFunction
+        {
+            public byte BlendOp;
+            public byte BlendFlags;
+            public byte SourceConstantAlpha;
+            public byte AlphaFormat;
+        }
+
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool UpdateLayeredWindow(IntPtr hwnd, IntPtr hdcDst, ref PointI pptDst, ref SizeI psize,
+            IntPtr hdcSrc, ref PointI pptSrc, int crKey, ref BlendFunction pblend, int dwFlags);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetDC(IntPtr hWnd);
+
+        [DllImport("user32.dll")]
+        private static extern int ReleaseDC(IntPtr hWnd, IntPtr hDC);
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr CreateCompatibleDC(IntPtr hDC);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteDC(IntPtr hdc);
+
+        [DllImport("gdi32.dll")]
+        private static extern IntPtr SelectObject(IntPtr hdc, IntPtr hgdiobj);
+
+        [DllImport("gdi32.dll")]
+        private static extern bool DeleteObject(IntPtr hObject);
 
         private readonly Process _batch;
         private readonly int _port;
         private readonly string _progressPath;
-        private readonly Label _statusLabel;
-        private readonly TextBox _logBox;
-        private readonly ProgressBar _bar;
         private readonly System.Windows.Forms.Timer _timer;
         private readonly DateTime _started = DateTime.Now;
+        private readonly Image _icon;
+        private readonly Font _lineFont;
+        private readonly PointI _screenPos;
         private long _readPos;
-        private bool _finishing;
+        private string _line;
+        private bool _failed;
+        private bool _fadingOut;
+        private DateTime _closeAt = DateTime.MinValue;
+        private double _progress;
+        private double _target;
+        private double _alpha;
+        private int _ticks;
 
         protected override bool ShowWithoutActivation
         {
             get { return true; }
         }
 
-        public SplashForm(Process batch, int port, string logDir)
+        protected override CreateParams CreateParams
+        {
+            get
+            {
+                CreateParams cp = base.CreateParams;
+                cp.ExStyle |= WS_EX_LAYERED;
+                return cp;
+            }
+        }
+
+        public SplashForm(Process batch, int port, string baseDir)
         {
             _batch = batch;
             _port = port;
-            _progressPath = Path.Combine(logDir, "progress.txt");
+            _progressPath = Path.Combine(baseDir, "logs", "progress.txt");
+            _line = Decode(SPLASH_START_B64);
 
-            Text = "DeepSeek Harness";
             FormBorderStyle = FormBorderStyle.None;
-            StartPosition = FormStartPosition.CenterScreen;
+            StartPosition = FormStartPosition.Manual;
             TopMost = true;
             ShowInTaskbar = false;
-            ClientSize = new Size(460, 292);
-            BackColor = Color.FromArgb(30, 30, 34);
-            DoubleBuffered = true;
-            Opacity = 0.05;
+            ClientSize = new Size(WindowWidth, WindowHeight);
 
-            Label title = new Label();
-            title.Text = "DeepSeek Harness";
-            title.Font = new Font("Segoe UI", 14F, FontStyle.Bold);
-            title.ForeColor = Color.FromArgb(245, 245, 250);
-            title.SetBounds(20, 14, 380, 30);
-            Controls.Add(title);
+            Rectangle wa = Screen.PrimaryScreen.WorkingArea;
+            _screenPos.X = wa.Left + (wa.Width - WindowWidth) / 2;
+            _screenPos.Y = wa.Top + (int)(wa.Height * 0.30);
+            Location = new Point(_screenPos.X, _screenPos.Y);
 
-            Label close = new Label();
-            close.Text = "\u00d7";
-            close.Font = new Font("Segoe UI", 12F, FontStyle.Bold);
-            close.ForeColor = Color.FromArgb(150, 150, 158);
-            close.TextAlign = ContentAlignment.MiddleCenter;
-            close.SetBounds(430, 12, 20, 22);
-            close.Cursor = Cursors.Hand;
-            close.Click += delegate { Close(); };
-            Controls.Add(close);
-
-            _statusLabel = new Label();
-            _statusLabel.Text = Decode(SPLASH_START_B64);
-            _statusLabel.Font = new Font("Microsoft YaHei UI", 9F);
-            _statusLabel.ForeColor = Color.FromArgb(180, 180, 190);
-            _statusLabel.AutoEllipsis = true;
-            _statusLabel.SetBounds(20, 50, 420, 20);
-            Controls.Add(_statusLabel);
-
-            _logBox = new TextBox();
-            _logBox.Multiline = true;
-            _logBox.ReadOnly = true;
-            _logBox.ScrollBars = ScrollBars.Vertical;
-            _logBox.BackColor = Color.FromArgb(20, 20, 24);
-            _logBox.ForeColor = Color.FromArgb(150, 200, 160);
-            _logBox.BorderStyle = BorderStyle.None;
-            _logBox.Font = new Font("Consolas", 8.25F);
-            _logBox.SetBounds(20, 76, 420, 178);
-            Controls.Add(_logBox);
-
-            _bar = new ProgressBar();
-            _bar.Style = ProgressBarStyle.Marquee;
-            _bar.MarqueeAnimationSpeed = 30;
-            _bar.SetBounds(20, 262, 420, 12);
-            Controls.Add(_bar);
+            _icon = LoadSplashIcon(baseDir);
+            _lineFont = new Font("Microsoft YaHei UI", 9.5F, FontStyle.Regular);
+            MouseClick += delegate { Close(); };
 
             _timer = new System.Windows.Forms.Timer();
-            _timer.Interval = 250;
+            _timer.Interval = 50;
             _timer.Tick += OnTick;
+        }
+
+        protected override void OnShown(EventArgs e)
+        {
+            base.OnShown(e);
+            Render();
             _timer.Start();
+        }
+
+        protected override void OnPaintBackground(PaintEventArgs e)
+        {
+            /* the whole surface lives in the layered window bitmap */
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            /* the whole surface lives in the layered window bitmap */
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                if (_timer != null) _timer.Dispose();
+                if (_icon != null) _icon.Dispose();
+                if (_lineFont != null) _lineFont.Dispose();
+            }
+            base.Dispose(disposing);
+        }
+
+        private static Image LoadSplashIcon(string baseDir)
+        {
+            try
+            {
+                string icoPath = Path.Combine(baseDir, "assets", "deepseek-whale.ico");
+                if (File.Exists(icoPath))
+                {
+                    using (Icon ico = new Icon(icoPath, new Size(256, 256)))
+                    {
+                        return ico.ToBitmap();
+                    }
+                }
+            }
+            catch { }
+            try
+            {
+                using (Icon ico = Icon.ExtractAssociatedIcon(Application.ExecutablePath))
+                {
+                    return ico.ToBitmap();
+                }
+            }
+            catch { }
+            return null;
         }
 
         private void OnTick(object sender, EventArgs e)
         {
-            if (Opacity < TargetOpacity) Opacity = Math.Min(TargetOpacity, Opacity + 0.12);
+            _ticks++;
+            if (_ticks % 4 == 0) ReadProgress();
 
-            ReadProgress();
-            if (_finishing) return;
-
-            if (GetListenerPid(_port) > 0)
+            if (_fadingOut)
             {
-                _finishing = true;
-                _statusLabel.Text = Decode(SPLASH_READY_B64);
-                _bar.Style = ProgressBarStyle.Continuous;
-                _bar.Value = 100;
-                _timer.Stop();
-                System.Windows.Forms.Timer closer = new System.Windows.Forms.Timer();
-                closer.Interval = 650;
-                closer.Tick += delegate { closer.Stop(); closer.Dispose(); Close(); };
-                closer.Start();
-                return;
+                _alpha -= 0.09;
+                if (_alpha <= 0.02)
+                {
+                    _timer.Stop();
+                    Render();
+                    Close();
+                    return;
+                }
+            }
+            else if (_alpha < 1.0)
+            {
+                _alpha = Math.Min(1.0, _alpha + 0.10);
             }
 
-            // The launcher cmd window already exited without the port opening:
-            // startup failed. Keep the window so the user can read the log.
-            if (_batch != null && _batch.HasExited && (DateTime.Now - _started).TotalSeconds > 2)
+            if (!_failed && !_fadingOut)
             {
-                _finishing = true;
-                _statusLabel.Text = Decode(SPLASH_FAIL_B64);
-                _statusLabel.ForeColor = Color.FromArgb(240, 160, 120);
-                _bar.Style = ProgressBarStyle.Continuous;
-                _bar.Value = 0;
-                _timer.Stop();
+                if (GetListenerPid(_port) > 0)
+                {
+                    _line = Decode(SPLASH_READY_B64);
+                    _target = 1.0;
+                    if (_closeAt == DateTime.MinValue) _closeAt = DateTime.Now.AddMilliseconds(750);
+                }
+                else if (_batch != null && _batch.HasExited && (DateTime.Now - _started).TotalSeconds > 2)
+                {
+                    _failed = true;
+                    _line = Decode(SPLASH_FAIL_B64);
+                    _target = 0;
+                }
             }
+            if (_closeAt != DateTime.MinValue && DateTime.Now >= _closeAt) _fadingOut = true;
+
+            if (_progress < _target) _progress = Math.Min(_target, _progress + 0.03);
+            else if (_progress > _target) _progress = Math.Max(_target, _progress - 0.03);
+
+            Render();
         }
 
         private void ReadProgress()
@@ -287,11 +387,152 @@ internal static class Program
                     {
                         string text = reader.ReadToEnd();
                         _readPos = fs.Position;
-                        if (text.Length > 0) _logBox.AppendText(text);
+                        string[] lines = text.Split(new char[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries);
+                        for (int i = 0; i < lines.Length; i++) ApplyLine(lines[i]);
                     }
                 }
             }
-            catch { /* the file may be replaced mid-write */ }
+            catch { /* the file may be rewritten mid-read */ }
+        }
+
+        private void ApplyLine(string raw)
+        {
+            string s = raw.Trim();
+            if (s.Length == 0) return;
+            if (s.StartsWith("["))
+            {
+                int close = s.IndexOf(']');
+                if (close > 0) s = s.Substring(close + 1).Trim();
+            }
+            if (s.StartsWith("launcher:")) s = s.Substring(9).Trim();
+            if (s.Length == 0) return;
+            if (s.Length > 40) s = s.Substring(0, 39) + "...";
+            _line = s;
+
+            if (s.IndexOf("FAILED", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                _failed = true;
+                _target = 0;
+            }
+            else if (s.IndexOf("is up", StringComparison.OrdinalIgnoreCase) >= 0) _target = 1.0;
+            else if (s.IndexOf("opening the browser", StringComparison.OrdinalIgnoreCase) >= 0) _target = 1.0;
+            else if (s.IndexOf("already running", StringComparison.OrdinalIgnoreCase) >= 0) _target = 0.9;
+            else if (s.IndexOf("starting dsh", StringComparison.OrdinalIgnoreCase) >= 0) _target = 0.35;
+            else if (s.IndexOf("dsh=", StringComparison.OrdinalIgnoreCase) >= 0) _target = 0.2;
+            else if (s.IndexOf("starting DSH", StringComparison.OrdinalIgnoreCase) >= 0) _target = 0.08;
+            else if (s.IndexOf("waiting for port", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                int open = s.IndexOf('(');
+                int secs = 0;
+                if (open > 0)
+                {
+                    string num = s.Substring(open + 1).Trim().TrimEnd(')').TrimEnd('s');
+                    int.TryParse(num, out secs);
+                }
+                _target = Math.Min(0.9, 0.35 + secs * 0.02);
+            }
+        }
+
+        private void Render()
+        {
+            using (Bitmap bmp = new Bitmap(WindowWidth, WindowHeight, PixelFormat.Format32bppArgb))
+            {
+                using (Graphics g = Graphics.FromImage(bmp))
+                {
+                    g.Clear(Color.Transparent);
+                    g.SmoothingMode = SmoothingMode.AntiAlias;
+                    g.InterpolationMode = InterpolationMode.HighQualityBicubic;
+                    g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+                    g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+
+                    if (_icon != null)
+                    {
+                        g.DrawImage(_icon, new Rectangle((WindowWidth - IconSide) / 2, 8, IconSide, IconSide));
+                    }
+
+                    SizeF measured = g.MeasureString(_line, _lineFont);
+                    float textX = (WindowWidth - measured.Width) / 2f;
+                    float textY = 226f;
+                    using (SolidBrush shadow = new SolidBrush(Color.FromArgb(150, 0, 0, 0)))
+                    using (SolidBrush brush = new SolidBrush(_failed ? Color.FromArgb(250, 255, 150, 110) : Color.FromArgb(250, 245, 245, 250)))
+                    {
+                        g.DrawString(_line, _lineFont, shadow, textX + 1.4f, textY + 1.4f);
+                        g.DrawString(_line, _lineFont, brush, textX, textY);
+                    }
+
+                    int barLeft = (WindowWidth - BarWidth) / 2;
+                    using (GraphicsPath track = RoundedRect(barLeft, BarTop, BarWidth, BarHeight, BarHeight / 2f))
+                    using (SolidBrush trackBrush = new SolidBrush(Color.FromArgb(90, 255, 255, 255)))
+                    {
+                        g.FillPath(trackBrush, track);
+                    }
+
+                    float fillWidth = (float)(BarWidth * _progress);
+                    if (fillWidth > BarHeight)
+                    {
+                        using (GraphicsPath fill = RoundedRect(barLeft, BarTop, fillWidth, BarHeight, BarHeight / 2f))
+                        using (SolidBrush fillBrush = new SolidBrush(_failed ? Color.FromArgb(240, 210, 90, 60) : Color.FromArgb(240, 38, 38, 44)))
+                        {
+                            g.FillPath(fillBrush, fill);
+                        }
+                    }
+                }
+                UpdateLayeredWindowSurface(bmp);
+            }
+        }
+
+        private static GraphicsPath RoundedRect(float x, float y, float w, float h, float r)
+        {
+            GraphicsPath path = new GraphicsPath();
+            if (r > 0)
+            {
+                r = Math.Min(r, Math.Min(w, h) / 2f);
+                path.AddArc(x, y, r * 2, r * 2, 180, 90);
+                path.AddArc(x + w - r * 2, y, r * 2, r * 2, 270, 90);
+                path.AddArc(x + w - r * 2, y + h - r * 2, r * 2, r * 2, 0, 90);
+                path.AddArc(x, y + h - r * 2, r * 2, r * 2, 90, 90);
+                path.CloseFigure();
+            }
+            else
+            {
+                path.AddRectangle(new RectangleF(x, y, w, h));
+            }
+            return path;
+        }
+
+        private void UpdateLayeredWindowSurface(Bitmap bmp)
+        {
+            IntPtr screenDc = GetDC(IntPtr.Zero);
+            IntPtr memDc = CreateCompatibleDC(screenDc);
+            IntPtr hBitmap = IntPtr.Zero;
+            IntPtr oldBitmap = IntPtr.Zero;
+            try
+            {
+                hBitmap = bmp.GetHbitmap(Color.FromArgb(0));
+                oldBitmap = SelectObject(memDc, hBitmap);
+
+                SizeI size = new SizeI();
+                size.cx = bmp.Width;
+                size.cy = bmp.Height;
+                PointI src = new PointI();
+                PointI dst = new PointI();
+                dst.X = _screenPos.X;
+                dst.Y = _screenPos.Y;
+                BlendFunction blend = new BlendFunction();
+                blend.BlendOp = AC_SRC_OVER;
+                blend.BlendFlags = 0;
+                blend.SourceConstantAlpha = (byte)Math.Max(0, Math.Min(255, (int)Math.Round(_alpha * 255)));
+                blend.AlphaFormat = AC_SRC_ALPHA;
+
+                UpdateLayeredWindow(Handle, screenDc, ref dst, ref size, memDc, ref src, 0, ref blend, ULW_ALPHA);
+            }
+            finally
+            {
+                if (oldBitmap != IntPtr.Zero) SelectObject(memDc, oldBitmap);
+                if (hBitmap != IntPtr.Zero) DeleteObject(hBitmap);
+                DeleteDC(memDc);
+                ReleaseDC(IntPtr.Zero, screenDc);
+            }
         }
     }
 
