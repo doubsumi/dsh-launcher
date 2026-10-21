@@ -65,6 +65,18 @@ DeepSeekHarnessLauncher\
 | 停止服务 | 双击运行 `stop-dsh.cmd`（或命令行 `stop-dsh.cmd`） |
 | 打开界面 | 双击 `open-ui.cmd`，或浏览器访问 http://127.0.0.1:3080 |
 
+### 启动画面
+
+双击快捷方式（后台隐藏启动）时会先出现一个**半透明启动画面**，实时显示启动日志与
+进度（数据来自 `logs\progress.txt`，由启动脚本写入）：
+
+- 启动中：显示“正在启动 DSH...”，下方滚动显示 `launcher: ...` 时间线，进度条为跑马灯；
+- 端口就绪后：显示“已启动，正在打开页面...”，约 0.6 秒后画面自动隐藏；
+- 启动失败（如 60 秒内端口未就绪）：画面保留并提示，可点右上角 `×` 关闭；
+- 脚本/自动化场景可设置 `DSH_NO_SPLASH=1` 跳过画面。
+
+画面置顶、不抢焦点、居中显示；右键菜单的“保持cmd窗口运行”不使用画面（直接显示 cmd）。
+
 ### 右键菜单“保持cmd窗口运行”的实现方式
 
 - 快捷方式本身就是普通 `.lnk`，**系统标准右键菜单完整保留**（打开 / 打开文件所在
@@ -115,6 +127,7 @@ npm 默认目录 `%APPDATA%\npm`，因此无论 dsh 装在哪个自定义 npm �
 - `DSH_NO_BROWSER=1`：启动后不自动打开浏览器
 - `DSH_AUTO_STOP=0`：关闭自动停止（关闭标签页不再停止 dsh）
 - `DSH_AUTO_STOP_IDLE=1`：自动停止的闲置宽限秒数（默认 1）
+- `DSH_NO_SPLASH=1`：不显示启动画面（静默启动）
 
 ## 卸载（完整恢复）
 
@@ -140,7 +153,7 @@ setup.cmd          # 重建桌面快捷方式 + 作用域右键菜单（会顺�
 ```cmd
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe ^
   /win32icon:assets\deepseek-whale.ico ^
-  /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
+  /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll Launcher.cs
 ```
 
 

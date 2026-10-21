@@ -69,13 +69,14 @@ $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
   /out:DeepSeekHarnessLauncher.exe `
   /r:System.dll `
   /r:System.Windows.Forms.dll `
+  /r:System.Drawing.dll `
   Launcher.cs
 ```
 
 CMD 等价形式：
 
 ```cmd
-"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
+"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll Launcher.cs
 ```
 
 > 也可用响应文件（.rsp）组织参数，见 §9.2。
@@ -226,6 +227,7 @@ Compress-Archive -Path .\DeepSeekHarnessLauncher.exe, Launcher.cs, *.cmd, *.ps1,
 /out:DeepSeekHarnessLauncher.exe
 /r:System.dll
 /r:System.Windows.Forms.dll
+/r:System.Drawing.dll
 Launcher.cs
 ```
 

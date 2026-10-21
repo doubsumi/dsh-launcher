@@ -36,6 +36,9 @@ rem --- timestamps (locale-independent, via PowerShell) ---
 for /f "tokens=1,2,3" %%a in ('powershell -NoProfile -Command "Get-Date -Format 'yyyyMMdd_HHmmss yyyy-MM-dd HH:mm:ss'"') do set "TS=%%a" & set "TSH=%%b %%c"
 set "LOG=%LOG_DIR%\dsh_%TS%.log"
 
+rem --- startup timeline for the splash window (launcher exe tails this file) ---
+> "%LOG_DIR%\progress.txt" echo [%TIME%] launcher: starting DSH (port %PORT%)
+
 rem --- locate dsh (generic: PATH -> `npm prefix -g` -> npm default %APPDATA%\npm) ---
 set "DSH_CMD="
 for /f "delims=" %%p in ('where dsh.cmd 2^>nul') do if not defined DSH_CMD set "DSH_CMD=%%p"
@@ -46,6 +49,7 @@ if not defined DSH_CMD (
     if /i "%MODE%"=="visible" pause
     exit /b 1
 )
+call :progress "launcher: dsh=%DSH_CMD%"
 
 echo [%TSH%] DSH launcher: mode=%MODE% url=%URL% dsh=%DSH_CMD% >> "%LOG%"
 
@@ -71,13 +75,16 @@ rem installed dsh-web-app package file (instant, no extra dsh boot - booting dsh
 rem just to print --help costs seconds and can even hang); older dsh without the
 rem flag keeps plain `web` (it never auto-opens).
 set "DSH_ARGS=web"
+rem keep the default port implicit (older dsh builds without a --port option
+rem still work); only pass it when a non-default port is requested
+if not "%PORT%"=="3080" set "DSH_ARGS=web --port %PORT%"
 set "DSH_STARTUP="
 for %%i in ("%DSH_CMD%") do set "DSH_BIN=%%~dpi"
 if exist "%DSH_BIN%node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\dsh-web-app\lib\startup.js" set "DSH_STARTUP=%DSH_BIN%node_modules\@deepseek-ai\dsh\node_modules\@deepseek-ai\dsh-web-app\lib\startup.js"
 if not defined DSH_STARTUP if exist "%DSH_BIN%node_modules\@deepseek-ai\dsh-web-app\lib\startup.js" set "DSH_STARTUP=%DSH_BIN%node_modules\@deepseek-ai\dsh-web-app\lib\startup.js"
 if defined DSH_STARTUP (
     findstr /c:"--no-open" "%DSH_STARTUP%" >nul 2>nul
-    if not errorlevel 1 set "DSH_ARGS=web --no-open"
+    if not errorlevel 1 set "DSH_ARGS=%DSH_ARGS% --no-open"
 )
 
 echo [%TSH%] dsh args: %DSH_ARGS% >> "%LOG%"
@@ -88,6 +95,7 @@ if /i "%MODE%"=="visible" goto start_visible
 rem Launch dsh inside this (hidden) console; all output goes to the log file.
 rem Note: once the server holds the log handle, other processes cannot append
 rem to it, so post-start state goes to logs\status.txt instead.
+call :progress "launcher: starting dsh"
 start "" /b cmd /c ""%DSH_CMD%" %DSH_ARGS% >>"%LOG%" 2>&1"
 goto wait_ready
 
@@ -116,6 +124,7 @@ netstat -ano | findstr ":%PORT% " | findstr "LISTENING" >nul 2>nul
 if not errorlevel 1 goto port_up
 set /a TRIES+=1
 if %TRIES% GEQ 60 goto wait_timeout
+call :progress "launcher: waiting for port %PORT% (%TRIES%s)"
 timeout /t 1 /nobreak >nul 2>nul
 goto waitloop
 
@@ -123,6 +132,7 @@ goto waitloop
 set "PID="
 for /f "tokens=5" %%p in ('netstat -ano ^| findstr ":%PORT% " ^| findstr "LISTENING"') do if not defined PID set "PID=%%p"
 if defined PID echo %PID%>"%LOG_DIR%\dsh.pid"
+call :progress "launcher: port %PORT% is up (pid %PID%)"
 (
 echo state=running
 echo time=%TSH%
@@ -131,9 +141,11 @@ echo pid=%PID%
 echo log=%LOG%
 ) > "%LOG_DIR%\status.txt"
 if /i not "%DSH_NO_BROWSER%"=="1" start "" "%URL%"
+call :progress "launcher: opening the browser"
 exit /b 0
 
 :wait_timeout
+call :progress "launcher: FAILED - port %PORT% did not open within 60s"
 (
 echo state=failed
 echo time=%TSH%
@@ -145,6 +157,7 @@ echo error=port %PORT% did not open within 60s
 exit /b 1
 
 :already_running
+call :progress "launcher: dsh is already running (port %PORT%)"
 (
 echo state=already-running
 echo time=%TSH%
@@ -159,4 +172,9 @@ if /i "%MODE%"=="visible" (
 )
 if /i not "%DSH_NO_BROWSER%"=="1" start "" "%URL%"
 if /i "%MODE%"=="visible" pause
+exit /b 0
+
+rem --- append one timestamped line to logs\progress.txt (shown by the splash) ---
+:progress
+>> "%LOG_DIR%\progress.txt" echo [%TIME%] %~1
 exit /b 0
