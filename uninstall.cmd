@@ -2,7 +2,7 @@
 rem ============================================================================
 rem  DeepSeek Harness launcher - COMPLETE UNINSTALL
 rem  ----------------------------------------------------------------------------
-rem  1. stop a running DSH server (only if it is node.exe on port 3080)
+rem  1. stop a running DSH server (only when the process really is dsh)
 rem  2. remove the right-click verb from the registry (restore system state)
 rem  3. remove the desktop shortcut "DeepSeek Harness"
 rem  4. delete ALL files in this folder (including this script)
@@ -17,7 +17,7 @@ echo ============================================================
 echo   DeepSeek Harness launcher - uninstall
 echo ============================================================
 echo This will:
-echo   1. stop a running DSH server (port 3080, only if node.exe)
+echo   1. stop a running DSH server (only when the process really is dsh)
 echo   2. remove the right-click menu item from the registry
 echo   3. remove the desktop shortcut "DeepSeek Harness"
 echo   4. delete ALL files in: %APP_DIR%

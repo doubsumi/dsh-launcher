@@ -140,8 +140,22 @@ echo url=%URL%
 echo pid=%PID%
 echo log=%LOG%
 ) > "%LOG_DIR%\status.txt"
-if /i not "%DSH_NO_BROWSER%"=="1" start "" "%URL%"
+
+rem Open the tokenised URL that dsh prints in its log (a browser without the
+rem session cookie would get a 401 from the bare URL). Falls back to %URL%.
+set "OPEN_URL="
+call :find_token_url
+if not defined OPEN_URL (
+    timeout /t 1 /nobreak >nul 2>nul
+    call :find_token_url
+)
+if not defined OPEN_URL set "OPEN_URL=%URL%"
+if /i not "%DSH_NO_BROWSER%"=="1" start "" "%OPEN_URL%"
 call :progress "launcher: opening the browser"
+exit /b 0
+
+:find_token_url
+for /f "tokens=3 delims= " %%u in ('findstr /c:"dsh web: http://" "%LOG%" 2^>nul') do if not defined OPEN_URL set "OPEN_URL=%%u"
 exit /b 0
 
 :wait_timeout

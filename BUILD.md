@@ -70,13 +70,14 @@ $csc = "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe"
   /r:System.dll `
   /r:System.Windows.Forms.dll `
   /r:System.Drawing.dll `
+  /r:System.Management.dll `
   Launcher.cs
 ```
 
 CMD 等价形式：
 
 ```cmd
-"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll Launcher.cs
+"C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.dll Launcher.cs
 ```
 
 > 也可用响应文件（.rsp）组织参数，见 §9.2。
@@ -87,7 +88,7 @@ CMD 等价形式：
 @echo off
 set CSC=C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe
 if not exist "%CSC%" set CSC=C:\Windows\Microsoft.NET\Framework\v4.0.30319\csc.exe
-"%CSC%" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
+"%CSC%" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.dll Launcher.cs
 if errorlevel 1 ( echo BUILD FAILED & exit /b 1 )
 echo OK: DeepSeekHarnessLauncher.exe
 ```
@@ -136,7 +137,7 @@ csc 命令**，产出 exe 并上传为 artifact，同时作为仓库的 **Build 
 - name: Build DeepSeekHarnessLauncher.exe
   shell: cmd
   run: |
-    "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
+    "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.dll Launcher.cs
 ```
 
 > 注意：exe 在 `.gitignore` 中（构建产物不入库），CI 从源码实时构建——保证“源码可复现构建”。
@@ -212,7 +213,7 @@ Compress-Archive -Path .\DeepSeekHarnessLauncher.exe, Launcher.cs, *.cmd, *.ps1,
 ### 9.1 发布优化
 
 ```powershell
-& $csc /nologo /target:winexe /optimize+ /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.dll Launcher.cs
+& $csc /nologo /target:winexe /optimize+ /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.dll Launcher.cs
 ```
 
 ### 9.2 响应文件（.rsp）
@@ -228,6 +229,7 @@ Compress-Archive -Path .\DeepSeekHarnessLauncher.exe, Launcher.cs, *.cmd, *.ps1,
 /r:System.dll
 /r:System.Windows.Forms.dll
 /r:System.Drawing.dll
+/r:System.Management.dll
 Launcher.cs
 ```
 

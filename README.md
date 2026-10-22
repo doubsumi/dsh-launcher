@@ -158,7 +158,7 @@ setup.cmd          # 重建桌面快捷方式 + 作用域右键菜单（会顺�
 ```cmd
 C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe ^
   /win32icon:assets\deepseek-whale.ico ^
-  /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll Launcher.cs
+  /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.dll Launcher.cs
 ```
 
 
@@ -168,9 +168,15 @@ C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe /nologo /target:winexe ^
 - **找不到 dsh**：确认已全局安装 `npm install -g @deepseek-ai/dsh`。启动器按
   `PATH` → `npm prefix -g` → `%APPDATA%\npm` 的顺序通用查找，不依赖固定路径；
   若 npm 全局目录不在 PATH 中也会被自动找到。
-- **端口被占用**：脚本检测到端口已在监听时会认为 DSH 已运行，直接打开浏览器。
+- **端口被占用**：启动器会先判断该端口上是不是**正在运行的 dsh**（通过其 HTTP 特征
+  识别）——是则直接打开页面，不再启动第二个实例；若被其它程序占用，则自动**顺延到
+  下一个空闲端口**（base+1…+9）启动，实际端口会显示在启动画面、`logs\status.txt`
+  和日志里，脚本/监视器也使用实际端口。
 - **只打开一个标签页**：新版 dsh 启动时会自己打开浏览器，容易与启动器打开的页面叠加
   成两个。启动器检测到 `dsh web --no-open` 受支持时会自动加上该参数，改由启动器统一
   打开一个页面；旧版 dsh 没有该参数（也不会自动打开），行为不受影响。
-- **停止失败提示“不是 node.exe”**：说明该端口被其他程序占用，脚本出于安全不会
-  误杀，请用 `netstat -ano | findstr :3080` 自行确认。
+- **停止只针对 dsh 自己**：`stop-dsh.cmd` 先按 `logs\dsh.pid`（启动器记录的实际监听
+  PID）定位，再校验进程是 `node.exe` 且命令行含 `@deepseek-ai\dsh`——端口上若是你
+  自己的其它 node 程序（开发服务器等），脚本会拒绝停止，不会误杀。
+- **启动画面图标大小**：修改 `Launcher.cs` 中 `SplashForm` 的 `IconSide`（默认 150，
+  单位像素），重新编译即可；文字与进度条位置会按图标大小自动下移。

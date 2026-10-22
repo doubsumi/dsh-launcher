@@ -21,6 +21,8 @@ using System.Drawing.Drawing2D;
 using System.Drawing.Imaging;
 using System.Globalization;
 using System.IO;
+using System.Management;
+using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
@@ -112,10 +114,55 @@ internal static class Program
             return RunInstall();                   // user agreed -> open cmd + install
         }
 
-        return Launch(cmdPath, baseDir, visible);
+        // --- port resolution -------------------------------------------------
+        //  base port free            -> use it
+        //  base port serves a dsh    -> just open the page (no new instance)
+        //  base port owned by others -> shift to the next free port (base+1..+9)
+        int basePort = 3080;
+        string portEnv = Environment.GetEnvironmentVariable("DSH_PORT");
+        if (!string.IsNullOrWhiteSpace(portEnv))
+        {
+            int parsed;
+            if (int.TryParse(portEnv.Trim(), out parsed) && parsed > 0 && parsed <= 65535) basePort = parsed;
+        }
+
+        int port = basePort;
+        if (GetListenerPid(basePort) > 0)
+        {
+            if (IsDshWeb(basePort))
+            {
+                if (!visible)
+                {
+                    // An active dsh already serves this port: open its page.
+                    if ((Environment.GetEnvironmentVariable("DSH_NO_BROWSER") ?? string.Empty) != "1")
+                    {
+                        string url = FindTokenUrl(baseDir, basePort);
+                        OpenBrowser(url != null ? url : "http://127.0.0.1:" + basePort.ToString());
+                    }
+                    return 0;
+                }
+            }
+            else
+            {
+                port = FindFreePort(basePort + 1, 9);
+                if (port <= 0)
+                {
+                    MessageBox.Show(
+                        "Ports " + basePort.ToString() + "-" + (basePort + 9).ToString() +
+                        " are all used by other programs." + Environment.NewLine +
+                        "Free one of them, or set DSH_PORT to another port.",
+                        "DeepSeek Harness Launcher",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Warning);
+                    return 1;
+                }
+            }
+        }
+
+        return Launch(cmdPath, baseDir, visible, port);
     }
 
-    private static int Launch(string cmdPath, string baseDir, bool visible)
+    private static int Launch(string cmdPath, string baseDir, bool visible, int port)
     {
         ProcessStartInfo psi = new ProcessStartInfo
         {
@@ -126,6 +173,7 @@ internal static class Program
             CreateNoWindow = !visible,
             WindowStyle = visible ? ProcessWindowStyle.Normal : ProcessWindowStyle.Hidden
         };
+        psi.EnvironmentVariables["DSH_PORT"] = port.ToString();
         try
         {
             Process batch = Process.Start(psi);
@@ -133,7 +181,7 @@ internal static class Program
             // the web UI is listening. --visible keeps the classic cmd window.
             if (!visible && (Environment.GetEnvironmentVariable("DSH_NO_SPLASH") ?? string.Empty) != "1")
             {
-                ShowSplash(batch, baseDir);
+                ShowSplash(batch, baseDir, port);
             }
             return 0;
         }
@@ -149,21 +197,108 @@ internal static class Program
     }
 
     // ------------------------------------------------------------------
+    // Port helpers: an "active dsh" is recognised by the web server's own
+    // behaviour (GET / without a token answers 401 with a dsh-specific body),
+    // so an unrelated program on the port is never mistaken for dsh.
+    // ------------------------------------------------------------------
+    private static bool IsDshWeb(int port)
+    {
+        try
+        {
+            HttpWebRequest request = (HttpWebRequest)WebRequest.Create("http://127.0.0.1:" + port.ToString() + "/");
+            request.Method = "GET";
+            request.Timeout = 800;
+            request.ReadWriteTimeout = 800;
+            request.AllowAutoRedirect = true;
+            request.Proxy = null;
+            using (WebResponse response = request.GetResponse())
+            {
+                using (StreamReader reader = new StreamReader(response.GetResponseStream()))
+                {
+                    string body = reader.ReadToEnd();
+                    return body.IndexOf("DeepSeek Harness", StringComparison.OrdinalIgnoreCase) >= 0;
+                }
+            }
+        }
+        catch (WebException ex)
+        {
+            // dsh answers "/" without a token with 401 and this exact message
+            try
+            {
+                if (ex.Response != null)
+                {
+                    using (StreamReader reader = new StreamReader(ex.Response.GetResponseStream()))
+                    {
+                        string body = reader.ReadToEnd();
+                        return body.IndexOf("dsh web authentication required", StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+                }
+            }
+            catch { }
+            return false;
+        }
+        catch { return false; }
+    }
+
+    private static int FindFreePort(int start, int count)
+    {
+        for (int p = start; p < start + count && p <= 65535; p++)
+        {
+            if (GetListenerPid(p) == 0) return p;
+        }
+        return 0;
+    }
+
+    private static void OpenBrowser(string url)
+    {
+        try
+        {
+            Process.Start(new ProcessStartInfo { FileName = url, UseShellExecute = true });
+        }
+        catch { /* no default browser: nothing sensible to do here */ }
+    }
+
+    // Recover the tokenised URL of a running dsh from its own stdout log, so the
+    // page opens already authenticated (fresh browsers cannot use the bare URL).
+    private static string FindTokenUrl(string baseDir, int port)
+    {
+        try
+        {
+            string logDir = Path.Combine(baseDir, "logs");
+            if (!Directory.Exists(logDir)) return null;
+            string[] files = Directory.GetFiles(logDir, "dsh_*.log");
+            Array.Sort(files, StringComparer.OrdinalIgnoreCase);
+            string marker = "http://127.0.0.1:" + port.ToString() + "/?token=";
+            for (int i = files.Length - 1; i >= 0; i--)
+            {
+                try
+                {
+                    using (FileStream fs = new FileStream(files[i], FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    using (StreamReader reader = new StreamReader(fs, Encoding.UTF8))
+                    {
+                        string text = reader.ReadToEnd();
+                        int at = text.IndexOf(marker, StringComparison.Ordinal);
+                        if (at < 0) continue;
+                        int end = at;
+                        while (end < text.Length && text[end] != '\r' && text[end] != '\n' && text[end] != ' ') end++;
+                        return text.Substring(at, end - at);
+                    }
+                }
+                catch { }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    // ------------------------------------------------------------------
     // Startup splash for the normal, console-less launch: a fully
     // transparent layered window showing the DSH icon, the latest launcher
     // line and a rounded progress bar; it closes itself once the web UI is
     // listening. Data comes from logs\progress.txt (written by start-dsh.cmd).
     // ------------------------------------------------------------------
-    private static void ShowSplash(Process batch, string baseDir)
+    private static void ShowSplash(Process batch, string baseDir, int port)
     {
-        int port = 3080;
-        string portEnv = Environment.GetEnvironmentVariable("DSH_PORT");
-        if (!string.IsNullOrWhiteSpace(portEnv))
-        {
-            int parsed;
-            if (int.TryParse(portEnv.Trim(), out parsed)) port = parsed;
-        }
-
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         using (SplashForm form = new SplashForm(batch, port, baseDir))
@@ -175,11 +310,13 @@ internal static class Program
     private sealed class SplashForm : Form
     {
         private const int WindowWidth = 420;
-        private const int WindowHeight = 230;
-        private const int IconSide = 150;
+        private const int IconSide = 150;   // splash icon edge length (tune this one)
+        private const int IconTop = 8;
         private const int BarWidth = 300;
         private const int BarHeight = 10;
-        private const int BarTop = 204;
+        private readonly int _textTop;
+        private readonly int _barTop;
+        private readonly int _windowHeight;
         private const int WS_EX_LAYERED = 0x00080000;
         private const int ULW_ALPHA = 2;
         private const int AC_SRC_OVER = 0;
@@ -274,7 +411,10 @@ internal static class Program
             StartPosition = FormStartPosition.Manual;
             TopMost = true;
             ShowInTaskbar = false;
-            ClientSize = new Size(WindowWidth, WindowHeight);
+            _textTop = IconTop + IconSide + 14;
+            _barTop = _textTop + 30;
+            _windowHeight = _barTop + BarHeight + 24;
+            ClientSize = new Size(WindowWidth, _windowHeight);
 
             Rectangle wa = Screen.PrimaryScreen.WorkingArea;
             _screenPos.X = wa.Left + (wa.Width - WindowWidth) / 2;
@@ -514,7 +654,7 @@ internal static class Program
 
         private void Render()
         {
-            using (Bitmap bmp = new Bitmap(WindowWidth, WindowHeight, PixelFormat.Format32bppArgb))
+            using (Bitmap bmp = new Bitmap(WindowWidth, _windowHeight, PixelFormat.Format32bppArgb))
             {
                 using (Graphics g = Graphics.FromImage(bmp))
                 {
@@ -534,7 +674,7 @@ internal static class Program
 
                     SizeF measured = g.MeasureString(_line, _lineFont);
                     float textX = (WindowWidth - measured.Width) / 2f;
-                    float textY = 172f;
+                    float textY = _textTop;
                     using (SolidBrush shadow = new SolidBrush(Color.FromArgb(90, 255, 255, 255)))
                     using (SolidBrush brush = new SolidBrush(_failed ? Color.FromArgb(250, 200, 60, 40) : Color.FromArgb(250, 18, 18, 22)))
                     {
@@ -543,7 +683,7 @@ internal static class Program
                     }
 
                     int barLeft = (WindowWidth - BarWidth) / 2;
-                    using (GraphicsPath track = RoundedRect(barLeft, BarTop, BarWidth, BarHeight, BarHeight / 2f))
+                    using (GraphicsPath track = RoundedRect(barLeft, _barTop, BarWidth, BarHeight, BarHeight / 2f))
                     using (SolidBrush trackBrush = new SolidBrush(Color.FromArgb(90, 255, 255, 255)))
                     {
                         g.FillPath(trackBrush, track);
@@ -552,7 +692,7 @@ internal static class Program
                     float fillWidth = (float)(BarWidth * _progress);
                     if (fillWidth > BarHeight)
                     {
-                        using (GraphicsPath fill = RoundedRect(barLeft, BarTop, fillWidth, BarHeight, BarHeight / 2f))
+                        using (GraphicsPath fill = RoundedRect(barLeft, _barTop, fillWidth, BarHeight, BarHeight / 2f))
                         using (SolidBrush fillBrush = new SolidBrush(Color.FromArgb(240, 38, 38, 44)))
                         {
                             g.FillPath(fillBrush, fill);
@@ -751,8 +891,8 @@ internal static class Program
                 idleMs += MONITOR_POLL_MS;
                 if (idleMs >= graceSeconds * 1000)
                 {
-                    // close the tab -> stop dsh (only if the listener is node.exe)
-                    if (IsNodeProcess(currentPid)) KillProcess(currentPid);
+                    // close the tab -> stop dsh (only a real dsh process is touched)
+                    if (IsDshProcess(currentPid)) KillProcess(currentPid);
                     return 0;
                 }
             }
@@ -820,6 +960,37 @@ internal static class Program
             return Process.GetProcessById(pid).ProcessName.Equals("node", StringComparison.OrdinalIgnoreCase);
         }
         catch { return false; }
+    }
+
+    // A real dsh process carries the dsh package path in its command line:
+    //   "node" "...\@deepseek-ai\dsh\lib\bin.js" web ...
+    // Unrelated node programs (e.g. a dev server that happens to listen on the
+    // same port) never match, so they are never stopped.
+    private static bool IsDshProcess(int pid)
+    {
+        try
+        {
+            using (ManagementObjectSearcher searcher = new ManagementObjectSearcher(
+                "SELECT CommandLine FROM Win32_Process WHERE ProcessId=" + pid.ToString()))
+            using (ManagementObjectCollection results = searcher.Get())
+            {
+                foreach (ManagementObject obj in results)
+                {
+                    using (obj)
+                    {
+                        object cmd = obj["CommandLine"];
+                        if (cmd == null) continue;
+                        string line = cmd.ToString();
+                        return line.IndexOf("@deepseek-ai\\dsh", StringComparison.OrdinalIgnoreCase) >= 0;
+                    }
+                }
+            }
+            return false;
+        }
+        catch
+        {
+            return IsNodeProcess(pid);   // WMI unavailable: keep the old safety net
+        }
     }
 
     private static void KillProcess(int pid)

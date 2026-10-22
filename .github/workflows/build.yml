@@ -19,7 +19,7 @@ jobs:
       - name: Build DeepSeekHarnessLauncher.exe
         shell: cmd
         run: |
-          "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.dll Launcher.cs
+          "C:\Windows\Microsoft.NET\Framework64\v4.0.30319\csc.exe" /nologo /target:winexe /win32icon:assets\deepseek-whale.ico /out:DeepSeekHarnessLauncher.exe /r:System.Windows.Forms.dll /r:System.Drawing.dll /r:System.Management.dll /r:System.dll Launcher.cs
 
       - name: Verify artifact
         shell: pwsh
